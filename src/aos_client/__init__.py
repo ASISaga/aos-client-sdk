@@ -30,6 +30,29 @@ Enterprise capabilities:
 - **Network Discovery** — peer app discovery and federation
 - **Local Development Mocks** — ``MockAOSClient`` for testing
 - **Workflow Templates** — composable workflow patterns
+
+AOS Ecosystem:
+
+The SDK is the client-facing layer of the Agent Operating System.  It
+communicates with the following deployed services over HTTP:
+
+- **aos-dispatcher** — central orchestration dispatcher (HTTP + Service Bus)
+- **realm-of-agents** — agent catalog providing :meth:`AOSClient.list_agents`
+- **mcp** — MCP server registry for per-agent tool selection
+
+When the AOS server-side packages are also installed, the SDK integrates
+with them directly:
+
+- ``pip install aos-client-sdk[aos]`` — adds ``aos-kernel``, enabling the
+  internal :mod:`~aos_client.foundry` module to delegate agent lifecycle
+  management to
+  :class:`AgentOperatingSystem.agents.FoundryAgentManager` and making the
+  SDK usable as the Foundry transport layer for the kernel's
+  :class:`~AgentOperatingSystem.orchestration.FoundryOrchestrationEngine`.
+
+- ``pip install aos-client-sdk[intelligence]`` — adds ``aos-intelligence``,
+  enabling LoRA adapter routing and multi-model inference via
+  :class:`aos_intelligence.ml.LoRAOrchestrationRouter`.
 """
 
 __version__ = "7.0.0"

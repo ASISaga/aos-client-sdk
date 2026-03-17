@@ -32,7 +32,9 @@
 | Runtime | Python 3.10+ |
 | Package | `aos-client-sdk` (`aos_client`) — version 7.0.0 |
 | Core deps | `pydantic>=2.0.0`, `aiohttp>=3.9.0` |
-| Azure extras | `azure-identity`, `azure-servicebus`, `azure-functions` |
+| Azure extras (`[azure]`) | `azure-identity`, `azure-servicebus`, `azure-functions` |
+| AOS kernel extras (`[aos]`) | `aos-kernel[azure]>=5.0.0` |
+| Intelligence extras (`[intelligence]`) | `aos-intelligence>=2.0.0` |
 | Tests | `pytest` + `pytest-asyncio` (asyncio_mode = auto) |
 | Linter | `pylint` |
 | Build / deploy | `azure.yaml` (Azure Developer CLI) |
@@ -137,13 +139,28 @@ pytest tests/test_app.py -v
 
 ## Related Repositories
 
-| Repository | Role |
-|-----------|------|
-| [business-infinity](https://github.com/ASISaga/business-infinity) | Example client application using this SDK |
-| [aos-dispatcher](https://github.com/ASISaga/aos-dispatcher) | AOS Orchestration API |
-| [aos-realm-of-agents](https://github.com/ASISaga/aos-realm-of-agents) | Agent catalog (C-suite) |
-| [aos-kernel](https://github.com/ASISaga/aos-kernel) | OS kernel (orchestration, messaging, storage) |
-| [purpose-driven-agent](https://github.com/ASISaga/purpose-driven-agent) | Agent base class |
+| Repository | Role | Connection |
+|-----------|------|-----------|
+| [business-infinity](https://github.com/ASISaga/business-infinity) | Example client application using this SDK | Uses SDK |
+| [aos-dispatcher](https://github.com/ASISaga/aos-dispatcher) | AOS Orchestration API (HTTP + Service Bus dispatcher) | SDK calls its REST API via `AOSClient` |
+| [realm-of-agents](https://github.com/ASISaga/realm-of-agents) | Agent catalog (C-suite agents) | SDK calls `/api/realm/agents` via `AOSClient.list_agents()` |
+| [mcp](https://github.com/ASISaga/mcp) | MCP server registry (Model Context Protocol) | SDK calls MCP endpoints via `AOSClient.call_mcp_tool()` |
+| [aos-kernel](https://github.com/ASISaga/aos-kernel) | OS kernel (orchestration, messaging, storage) | Optional Python dep (`[aos]`); `foundry.py` delegates to `FoundryAgentManager` |
+| [aos-intelligence](https://github.com/ASISaga/aos-intelligence) | ML intelligence layer (LoRA, DPO, RAG) | Optional Python dep (`[intelligence]`); enables LoRA routing |
+| [purpose-driven-agent](https://github.com/ASISaga/purpose-driven-agent) | Agent base class | Used by agents that the SDK orchestrates |
+
+### Ecosystem Connection Details
+
+The SDK connects to the AOS ecosystem at two levels:
+
+**HTTP (always active):**
+- `AOSClient` → `aos-dispatcher` HTTP endpoints (orchestration, knowledge base, risk, audit, etc.)
+- `AOSClient.list_agents()` → `realm-of-agents` HTTP endpoint
+- `AOSClient.call_mcp_tool()` → `mcp` HTTP endpoint via dispatcher
+
+**Python packages (optional):**
+- `pip install aos-client-sdk[aos]` → `aos-kernel` installed; `foundry.py` delegates agent registration to `FoundryAgentManager`; SDK becomes the Foundry transport layer for the kernel's `FoundryOrchestrationEngine`
+- `pip install aos-client-sdk[intelligence]` → `aos-intelligence` installed; `LoRAOrchestrationRouter` available for ML-driven model selection
 
 ## Key Design Principles
 
