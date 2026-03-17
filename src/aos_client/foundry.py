@@ -6,6 +6,12 @@ Foundry.  The integration surfaces Foundry's agent lifecycle, conversation
 threading, and run management through a Pythonic async API that is
 consistent with the rest of the AOS Client SDK.
 
+This module serves as the Foundry transport layer that higher-level AOS
+components build upon.  When ``aos-kernel`` is installed (via
+``pip install aos-client-sdk[aos]``), :class:`FoundryAgentService` delegates
+agent lifecycle management to the kernel's :class:`FoundryAgentManager`,
+ensuring consistent behaviour across the entire AOS ecosystem.
+
 Typical usage::
 
     from aos_client.foundry import AIProjectClient, FoundryAgentService
@@ -25,6 +31,20 @@ Typical usage::
             purpose="Quarterly review",
             context={"quarter": "Q1-2026"},
         )
+
+AOS Ecosystem integration:
+
+- **aos-kernel** (`pip install aos-client-sdk[aos]`):
+  :class:`FoundryAgentService` uses
+  :class:`AgentOperatingSystem.agents.FoundryAgentManager` for agent
+  registration when the kernel is installed.  The kernel's
+  :class:`~AgentOperatingSystem.orchestration.FoundryOrchestrationEngine`
+  in turn uses this module as its orchestration backend.
+
+- **aos-intelligence** (`pip install aos-client-sdk[intelligence]`):
+  LoRA adapter selection and multi-model routing provided by
+  :class:`aos_intelligence.ml.LoRAOrchestrationRouter` is automatically
+  used when available.
 """
 
 from __future__ import annotations
@@ -40,6 +60,32 @@ logger = logging.getLogger(__name__)
 # Azure AI Foundry REST API version used by this module
 # ---------------------------------------------------------------------------
 _DEFAULT_API_VERSION = "2024-12-01-preview"
+
+# ---------------------------------------------------------------------------
+# Optional integration with aos-kernel
+# Install with: pip install aos-client-sdk[aos]
+# ---------------------------------------------------------------------------
+try:
+    from AgentOperatingSystem.agents import FoundryAgentManager as _FoundryAgentManager  # type: ignore[import-untyped]
+
+    _AOS_KERNEL_AVAILABLE = True
+    logger.debug("aos-kernel detected — FoundryAgentService will delegate to FoundryAgentManager")
+except ImportError:
+    _FoundryAgentManager = None  # type: ignore[assignment,misc]
+    _AOS_KERNEL_AVAILABLE = False
+
+# ---------------------------------------------------------------------------
+# Optional integration with aos-intelligence
+# Install with: pip install aos-client-sdk[intelligence]
+# ---------------------------------------------------------------------------
+try:
+    from aos_intelligence.ml import LoRAOrchestrationRouter as _LoRAOrchestrationRouter  # type: ignore[import-untyped]
+
+    _AOS_INTELLIGENCE_AVAILABLE = True
+    logger.debug("aos-intelligence detected — LoRA routing enabled for model selection")
+except ImportError:
+    _LoRAOrchestrationRouter = None  # type: ignore[assignment,misc]
+    _AOS_INTELLIGENCE_AVAILABLE = False
 
 
 # ===================================================================
@@ -602,6 +648,14 @@ class FoundryAgentService:
     coordinates agent registration, thread management, and turn-based
     execution across multiple agents.
 
+    When ``aos-kernel`` is installed (``pip install aos-client-sdk[aos]``),
+    agent registration is delegated to
+    :class:`AgentOperatingSystem.agents.FoundryAgentManager` to ensure
+    consistent agent lifecycle management across the entire AOS ecosystem.
+    The kernel's
+    :class:`~AgentOperatingSystem.orchestration.FoundryOrchestrationEngine`
+    uses this service as its underlying Foundry backend.
+
     :param project_client: An :class:`AIProjectClient` connected to
         the target Foundry project.
     :param gateway_url: Optional AI Gateway URL for request routing.
@@ -616,6 +670,12 @@ class FoundryAgentService:
         self.gateway_url = gateway_url
         # Local orchestration bookkeeping
         self._orchestrations: Dict[str, Dict[str, Any]] = {}
+        # Use kernel's FoundryAgentManager when aos-kernel is installed
+        self._agent_manager: Any = (
+            _FoundryAgentManager(project_client=project_client)
+            if _AOS_KERNEL_AVAILABLE
+            else None
+        )
 
     # ------------------------------------------------------------------
     # Agent registration
@@ -631,6 +691,10 @@ class FoundryAgentService:
     ) -> AzureAIAgent:
         """Register an agent with the Foundry Agent Service.
 
+        When ``aos-kernel`` is installed, agent registration is delegated to
+        :class:`AgentOperatingSystem.agents.FoundryAgentManager` for
+        consistent lifecycle management across the AOS ecosystem.
+
         If an agent with the given *agent_id* already exists locally it
         is returned directly; otherwise a new agent is created via
         :meth:`AIProjectClient.create_agent`.
@@ -642,6 +706,27 @@ class FoundryAgentService:
         :param tools: Optional tool definitions.
         :returns: An :class:`AzureAIAgent` instance.
         """
+        # Delegate to kernel's FoundryAgentManager when aos-kernel is available
+        if self._agent_manager is not None:
+            record = await self._agent_manager.register_agent(
+                agent_id=agent_id,
+                # The kernel uses "purpose" for what Foundry calls "instructions":
+                # in AOS semantics, an agent's instructions define its perpetual purpose.
+                purpose=instructions,
+                name=name,
+                model=model,
+                tools=tools,
+            )
+            # Wrap the kernel's registration record in an AzureAIAgent for SDK consistency
+            return AzureAIAgent(
+                agent_id=record["agent_id"],
+                model=record["model"],
+                name=record.get("name", name),
+                instructions=instructions,
+                tools=tools or [],
+            )
+
+        # Fallback: direct creation without kernel
         # Return existing agent when already registered
         if agent_id in self.project_client._agents:
             logger.debug("Agent %s already registered — returning existing", agent_id)
@@ -769,8 +854,14 @@ class FoundryAgentService:
     async def list_registered_agents(self) -> List[Dict[str, Any]]:
         """List all agents currently registered with the project client.
 
+        When ``aos-kernel`` is installed, returns agents tracked by
+        :class:`AgentOperatingSystem.agents.FoundryAgentManager`.
+
         :returns: List of agent info dictionaries.
         """
+        if self._agent_manager is not None:
+            # FoundryAgentManager.list_registered_agents() is synchronous (returns a list directly)
+            return self._agent_manager.list_registered_agents()
         return await self.project_client.list_agents()
 
     def __repr__(self) -> str:  # pragma: no cover

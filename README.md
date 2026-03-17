@@ -50,36 +50,76 @@ functions = app.get_functions()
 That's it.  The SDK creates all HTTP triggers, Service Bus triggers, health
 endpoints, and authentication middleware.
 
-## Architecture
+## AOS Ecosystem
+
+The SDK is the client-facing layer of the Agent Operating System.  It
+communicates with deployed AOS services over HTTP and Azure Service Bus.
 
 ```
-┌─────────────────────────────────────────────────────┐
-│  Client Application (e.g. BusinessInfinity)         │
-│  ┌───────────────────────────────────────────────┐  │
-│  │  workflows.py       @app.workflow decorators  │  │
-│  │  function_app.py    app.get_functions()       │  │
-│  │    └─ aos-client-sdk handles everything else  │  │
-│  └───────────────────────────────────────────────┘  │
-│  Zero Azure Functions boilerplate.                  │
-│  Zero agent code. Zero infrastructure code.         │
-└──────────────┬───────────────────┬──────────────────┘
-               │ HTTPS             │ Azure Service Bus
-               ▼                   ▼
-┌─────────────────────────────────────────────────────┐
-│  Agent Operating System (infrastructure)            │
-│  ┌──────────────────┐  ┌─────────────────────────┐  │
-│  │ aos-dispatcher  │  │ aos-realm-of-agents     │  │
-│  │ POST /api/        │  │ GET /api/realm/agents   │  │
-│  │  orchestrations   │  │ Agent catalog           │  │
-│  │ Service Bus       │  └─────────────────────────┘  │
-│  │  trigger          │                               │
-│  └────────┬──────────┘                               │
-│  ┌────────▼──────────────────────────────────────┐   │
-│  │ aos-kernel                                     │  │
-│  │ Orchestration · Messaging · Storage · Auth     │  │
-│  └────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│  Client Application (e.g. business-infinity)                        │
+│  ┌─────────────────────────────────────────────────────────────┐   │
+│  │  workflows.py       @app.workflow decorators               │   │
+│  │  function_app.py    app.get_functions()                    │   │
+│  │    └─ aos-client-sdk handles everything else               │   │
+│  └─────────────────────────────────────────────────────────────┘   │
+│  Zero Azure Functions boilerplate.                                   │
+│  Zero agent code. Zero infrastructure code.                          │
+└──────────────┬───────────────────────┬──────────────────────────────┘
+               │ HTTPS                 │ Azure Service Bus
+               ▼                       ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  Agent Operating System (AOS)                                        │
+│                                                                      │
+│  ┌─────────────────────┐  ┌────────────────────┐  ┌──────────────┐  │
+│  │  aos-dispatcher     │  │  realm-of-agents   │  │    mcp       │  │
+│  │  POST /orchestrations│  │  GET /realm/agents │  │  MCP server  │  │
+│  │  Service Bus trigger │  │  Agent catalog     │  │  registry    │  │
+│  └──────────┬──────────┘  └────────────────────┘  └──────────────┘  │
+│             │                                                        │
+│  ┌──────────▼─────────────────────────────────────────────────────┐  │
+│  │  aos-kernel                                                    │  │
+│  │  FoundryAgentManager · FoundryOrchestrationEngine              │  │
+│  │  Messaging · Storage · Auth · Reliability · Observability      │  │
+│  └──────────────────────────────┬─────────────────────────────────┘  │
+│                                 │                                    │
+│  ┌──────────────────────────────▼─────────────────────────────────┐  │
+│  │  aos-intelligence                                              │  │
+│  │  LoRA adapters · DPO training · RAG · Multi-LoRA inference     │  │
+│  └────────────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────┘
 ```
+
+### How the SDK Connects to the Ecosystem
+
+| Component | Connection | How |
+|-----------|-----------|-----|
+| **aos-dispatcher** | HTTP REST + Service Bus | `AOSClient` calls `/api/orchestrations`, `/api/knowledge/*`, etc. |
+| **realm-of-agents** | HTTP REST | `AOSClient.list_agents()` calls `/api/realm/agents` |
+| **mcp** | HTTP REST via dispatcher | `AOSClient.list_mcp_servers()` and `call_mcp_tool()` |
+| **aos-kernel** | Optional Python package | `foundry.py` module delegates to `FoundryAgentManager` when installed |
+| **aos-intelligence** | Optional Python package | LoRA routing enabled via `LoRAOrchestrationRouter` when installed |
+
+### Optional AOS Package Extras
+
+Install with AOS server-side packages when running AOS components in the
+same process (embedded mode, local development, or custom deployments):
+
+```bash
+# Include aos-kernel for direct kernel integration
+pip install aos-client-sdk[aos]
+
+# Include aos-intelligence for LoRA/RAG/ML features
+pip install aos-client-sdk[intelligence]
+
+# Azure services (Service Bus, Functions, Identity)
+pip install aos-client-sdk[azure]
+```
+
+When `aos-kernel` is installed, the SDK's internal Foundry transport layer
+(`aos_client.foundry`) automatically integrates with the kernel's
+`FoundryAgentManager` for agent lifecycle management and becomes the
+underlying Foundry backend for `FoundryOrchestrationEngine`.
 
 ## API Reference
 
@@ -200,9 +240,11 @@ async with AOSRegistration(aos_endpoint="https://my-aos.azurewebsites.net") as r
 
 ## Related Repositories
 
-- [aos-kernel](https://github.com/ASISaga/aos-kernel) — OS kernel (orchestration, messaging, storage)
-- [aos-dispatcher](https://github.com/ASISaga/aos-dispatcher) — AOS orchestration API
-- [aos-realm-of-agents](https://github.com/ASISaga/aos-realm-of-agents) — Agent catalog
+- [aos-kernel](https://github.com/ASISaga/aos-kernel) — OS kernel (orchestration, messaging, storage, auth)
+- [aos-intelligence](https://github.com/ASISaga/aos-intelligence) — ML intelligence layer (LoRA, DPO, RAG)
+- [aos-dispatcher](https://github.com/ASISaga/aos-dispatcher) — AOS orchestration API (HTTP + Service Bus dispatcher)
+- [realm-of-agents](https://github.com/ASISaga/realm-of-agents) — Agent catalog (RealmOfAgents function app)
+- [mcp](https://github.com/ASISaga/mcp) — MCP server registry (Model Context Protocol function app)
 - [business-infinity](https://github.com/ASISaga/business-infinity) — Example client application
 - [purpose-driven-agent](https://github.com/ASISaga/purpose-driven-agent) — Agent base class
 
