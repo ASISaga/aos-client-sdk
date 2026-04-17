@@ -31,8 +31,8 @@ Option A: Use AOSApp framework (recommended for Azure Functions)
     #   import azure.functions as func
     #   from my_app.workflows import aos_app
     #   bp = aos_app.get_blueprint()
-    #   app = func.FunctionApp()
-    #   app.register_blueprint(bp)
+    #   func_app = func.FunctionApp()
+    #   func_app.register_blueprint(bp)
 
 Option B: Use AOSClient directly (for scripts and non-Functions apps)
 """

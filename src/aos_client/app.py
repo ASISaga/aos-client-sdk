@@ -23,10 +23,10 @@ Usage::
 
     # function_app.py:
     #   import azure.functions as func
-    #   from my_app.workflows import app
-    #   bp = app.get_blueprint()
-    #   app = func.FunctionApp()
-    #   app.register_blueprint(bp)
+    #   from my_app.workflows import aos_app
+    #   bp = aos_app.get_blueprint()
+    #   func_app = func.FunctionApp()
+    #   func_app.register_blueprint(bp)
 """
 
 from __future__ import annotations
@@ -123,8 +123,8 @@ class AOSApp:
         from my_app.workflows import aos_app
 
         bp = aos_app.get_blueprint()
-        app = func.FunctionApp()
-        app.register_blueprint(bp)
+        func_app = func.FunctionApp()
+        func_app.register_blueprint(bp)
 
     Args:
         name: Application name (used for registration and Service Bus routing).

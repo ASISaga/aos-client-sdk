@@ -25,9 +25,9 @@ pip install aos-client-sdk[azure]
 # workflows.py
 from aos_client import AOSApp, WorkflowRequest
 
-app = AOSApp(name="my-app")
+aos_app = AOSApp(name="my-app")
 
-@app.workflow("strategic-review")
+@aos_app.workflow("strategic-review")
 async def strategic_review(request: WorkflowRequest):
     agents = await request.client.list_agents()
     c_suite = [a.agent_id for a in agents if a.agent_type in ("LeadershipAgent", "CMOAgent")]
