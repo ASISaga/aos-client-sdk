@@ -15,9 +15,9 @@ Option A: Use AOSApp framework (recommended for Azure Functions)
 
     from aos_client import AOSApp, WorkflowRequest
 
-    app = AOSApp(name="my-app")
+    aos_app = AOSApp(name="my-app")
 
-    @app.workflow("strategic-review")
+    @aos_app.workflow("strategic-review")
     async def strategic_review(request: WorkflowRequest):
         agents = await request.client.list_agents()
         c_suite = [a.agent_id for a in agents]
@@ -26,6 +26,13 @@ Option A: Use AOSApp framework (recommended for Azure Functions)
             purpose="strategic_review",
             context=request.body,
         )
+
+    # function_app.py:
+    #   import azure.functions as func
+    #   from my_app.workflows import aos_app
+    #   bp = aos_app.get_blueprint()
+    #   func_app = func.FunctionApp()
+    #   func_app.register_blueprint(bp)
 
 Option B: Use AOSClient directly (for scripts and non-Functions apps)
 """

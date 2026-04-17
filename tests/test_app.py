@@ -13,6 +13,7 @@ class TestAOSApp:
         assert app.name == "test-app"
         assert app.enable_service_bus is True
         assert app._workflows == {}
+        assert app._blueprint is None
 
     def test_init_custom_endpoint(self):
         app = AOSApp(
@@ -22,6 +23,15 @@ class TestAOSApp:
         )
         assert app.aos_endpoint == "https://my-aos.azurewebsites.net"
         assert app.realm_endpoint == "https://my-realm.azurewebsites.net"
+
+    def test_has_get_blueprint(self):
+        app = AOSApp(name="test-app")
+        assert hasattr(app, "get_blueprint")
+        assert callable(app.get_blueprint)
+
+    def test_no_get_functions(self):
+        app = AOSApp(name="test-app")
+        assert not hasattr(app, "get_functions")
 
     def test_workflow_decorator(self):
         app = AOSApp(name="test-app")

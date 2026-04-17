@@ -3,7 +3,7 @@
 This SDK enables client applications to interact with the Agent Operating System
 as an infrastructure service:
 
-- **AOSApp** — Azure Functions application framework with workflow decorators
+- **AOSApp** — Azure Functions Blueprint framework with workflow decorators
 - **AOSClient** — HTTP/Service Bus client for agent discovery and orchestration
 - **AOSAuth** — Azure IAM authentication and role-based access control
 - **AOSServiceBus** — Async communication via Azure Service Bus
