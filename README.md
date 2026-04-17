@@ -6,7 +6,7 @@ Application framework and Python SDK for building **Azure Functions apps** power
 
 The AOS Client SDK provides:
 
-- **`AOSApp`** — Azure Functions application framework with `@workflow` decorators.  Generates HTTP triggers, Service Bus triggers, health endpoints, and auth middleware automatically.
+- **`AOSApp`** — Azure Functions Blueprint framework with `@workflow` decorators.  Generates HTTP triggers, Service Bus triggers, health endpoints, and auth middleware automatically via `func.Blueprint`.
 - **`AOSClient`** — Async HTTP/Service Bus client for agent discovery and orchestration.
 - **`AOSAuth`** — Azure IAM authentication and role-based access control.
 - **`AOSServiceBus`** — Bidirectional async communication via Azure Service Bus (scale-to-zero).
@@ -38,17 +38,21 @@ async def strategic_review(request: WorkflowRequest):
     )
 ```
 
-### Azure Functions entry point (zero boilerplate)
+### Azure Functions entry point (Blueprint pattern)
 
 ```python
 # function_app.py
-from my_app.workflows import app
+import azure.functions as func
+from my_app.workflows import aos_app
 
-functions = app.get_functions()
+bp = aos_app.get_blueprint()
+app = func.FunctionApp()
+app.register_blueprint(bp)
 ```
 
 That's it.  The SDK creates all HTTP triggers, Service Bus triggers, health
-endpoints, and authentication middleware.
+endpoints, and authentication middleware as a Blueprint that is registered
+with the Azure Functions consumption-plan-compatible ``FunctionApp``.
 
 ## AOS Ecosystem
 
@@ -60,8 +64,8 @@ communicates with deployed AOS services over HTTP and Azure Service Bus.
 │  Client Application (e.g. business-infinity)                        │
 │  ┌─────────────────────────────────────────────────────────────┐   │
 │  │  workflows.py       @app.workflow decorators               │   │
-│  │  function_app.py    app.get_functions()                    │   │
-│  │    └─ aos-client-sdk handles everything else               │   │
+│  │  function_app.py    app.register_blueprint(bp)           │   │
+│  │    └─ aos-client-sdk provides Blueprint with triggers    │   │
 │  └─────────────────────────────────────────────────────────────┘   │
 │  Zero Azure Functions boilerplate.                                   │
 │  Zero agent code. Zero infrastructure code.                          │
@@ -128,7 +132,7 @@ underlying Foundry backend for `FoundryOrchestrationEngine`.
 | Method | Description |
 |--------|-------------|
 | `@app.workflow(name)` | Register a business workflow (creates HTTP + Service Bus triggers) |
-| `app.get_functions()` | Build Azure Functions app with all registered triggers |
+| `app.get_blueprint()` | Build Azure Functions Blueprint with all registered triggers |
 | `app.get_workflow_names()` | List registered workflow names |
 
 ### `AOSClient` — AOS Communication

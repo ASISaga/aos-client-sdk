@@ -1,4 +1,4 @@
-"""AOSApp — Azure Functions application framework for AOS client apps.
+"""AOSApp — Azure Functions Blueprint framework for AOS client apps.
 
 Provides all Azure Functions scaffolding so client applications focus
 only on business logic.  The SDK creates HTTP triggers, Service Bus
@@ -21,9 +21,12 @@ Usage::
             context=request.body,
         )
 
-    # function_app.py just does:
+    # function_app.py:
+    #   import azure.functions as func
     #   from my_app.workflows import app
-    #   functions = app.get_functions()
+    #   bp = app.get_blueprint()
+    #   app = func.FunctionApp()
+    #   app.register_blueprint(bp)
 """
 
 from __future__ import annotations
@@ -101,9 +104,9 @@ class _WorkflowRegistration:
 
 
 class AOSApp:
-    """Azure Functions application framework for AOS client apps.
+    """Azure Functions Blueprint framework for AOS client apps.
 
-    Wraps :class:`azure.functions.FunctionApp` and provides decorators
+    Builds an :class:`azure.functions.Blueprint` and provides decorators
     to register business workflows.  The SDK handles:
 
     - Azure Functions HTTP triggers for each workflow
@@ -112,6 +115,16 @@ class AOSApp:
     - Authentication and access control
     - AOS client lifecycle management
     - App registration with AOS
+
+    The generated Blueprint is registered with the user's
+    ``azure.functions.FunctionApp`` in ``function_app.py``::
+
+        import azure.functions as func
+        from my_app.workflows import aos_app
+
+        bp = aos_app.get_blueprint()
+        app = func.FunctionApp()
+        app.register_blueprint(bp)
 
     Args:
         name: Application name (used for registration and Service Bus routing).
@@ -157,7 +170,7 @@ class AOSApp:
         self._workflows: Dict[str, _WorkflowRegistration] = {}
         self._update_handlers: Dict[str, Callable] = {}
         self._mcp_tools: Dict[str, Callable] = {}
-        self._functions_app: Optional[Any] = None  # azure.functions.FunctionApp
+        self._blueprint: Optional[Any] = None  # azure.functions.Blueprint
 
     # ------------------------------------------------------------------
     # Workflow registration
@@ -249,35 +262,35 @@ class AOSApp:
     # Azure Functions app generation
     # ------------------------------------------------------------------
 
-    def get_functions(self) -> Any:
-        """Build and return the ``azure.functions.FunctionApp`` instance.
+    def get_blueprint(self) -> Any:
+        """Build and return an ``azure.functions.Blueprint`` instance.
 
         Creates HTTP triggers for each registered workflow, a Service Bus
         trigger for async results, and a health endpoint.
 
         Returns:
-            Configured :class:`azure.functions.FunctionApp`.
+            Configured :class:`azure.functions.Blueprint`.
         """
         import azure.functions as func  # type: ignore[import-untyped]
 
-        app = func.FunctionApp()
-        self._functions_app = app
+        bp = func.Blueprint()
+        self._blueprint = bp
 
         # Register workflow HTTP triggers
         for wf in self._workflows.values():
-            self._register_http_trigger(app, wf)
+            self._register_http_trigger(bp, wf)
 
         # Register Service Bus trigger for orchestration results
         if self.enable_service_bus:
-            self._register_service_bus_trigger(app)
+            self._register_service_bus_trigger(bp)
 
         # Register health endpoint
-        self._register_health(app)
+        self._register_health(bp)
 
-        return app
+        return bp
 
-    def _register_http_trigger(self, app: Any, wf: _WorkflowRegistration) -> None:
-        """Register an HTTP trigger for a workflow."""
+    def _register_http_trigger(self, bp: Any, wf: _WorkflowRegistration) -> None:
+        """Register an HTTP trigger for a workflow on a Blueprint."""
         import azure.functions as func  # type: ignore[import-untyped]
 
         route = f"workflows/{wf.name}"
@@ -356,11 +369,11 @@ class AOSApp:
 
         # Apply the route decorator
         http_handler.__name__ = func_name
-        decorated = app.route(route=route, methods=[wf.method])(http_handler)
-        app.function_name(func_name)(decorated)
+        decorated = bp.route(route=route, methods=[wf.method])(http_handler)
+        bp.function_name(func_name)(decorated)
 
-    def _register_service_bus_trigger(self, app: Any) -> None:
-        """Register a Service Bus trigger for async orchestration results."""
+    def _register_service_bus_trigger(self, bp: Any) -> None:
+        """Register a Service Bus trigger for async orchestration results on a Blueprint."""
         import azure.functions as func  # type: ignore[import-untyped]
 
         aos_app = self
@@ -381,16 +394,16 @@ class AOSApp:
             )
 
         result_handler.__name__ = "service_bus_result_handler"
-        decorated = app.service_bus_topic_trigger(
+        decorated = bp.service_bus_topic_trigger(
             arg_name="msg",
             topic_name=topic_name,
             subscription_name=subscription_name,
             connection=self.service_bus_connection_env,
         )(result_handler)
-        app.function_name("service_bus_result_handler")(decorated)
+        bp.function_name("service_bus_result_handler")(decorated)
 
-    def _register_health(self, app: Any) -> None:
-        """Register a health-check endpoint."""
+    def _register_health(self, bp: Any) -> None:
+        """Register a health-check endpoint on a Blueprint."""
         import azure.functions as func  # type: ignore[import-untyped]
 
         aos_app = self
@@ -424,8 +437,8 @@ class AOSApp:
                 )
 
         health.__name__ = "health"
-        decorated = app.route(route="health", methods=["GET"])(health)
-        app.function_name("health")(decorated)
+        decorated = bp.route(route="health", methods=["GET"])(health)
+        bp.function_name("health")(decorated)
 
     # ------------------------------------------------------------------
     # Helpers
